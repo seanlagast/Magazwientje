@@ -2,7 +2,7 @@
 
 import os
 from ctypes.wintypes import RGB
-import time
+from time import sleep
 #from matplotlib.colors import to_rgb
 import numpy as np
 import cv2
@@ -17,6 +17,8 @@ import busio
 #   https://github.com/adafruit/Adafruit_CircuitPython_PCA9685
 from adafruit_motor import servo
 from adafruit_pca9685 import PCA9685
+from azure.iot.device import IoTHubDeviceClient
+from azure.iot.device import MethodResponse
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -24,11 +26,11 @@ server = 'seansqlserverconxiondemo.database.windows.net'
 database = 'SeanSQLServer' 
 username = 'seansimon' 
 password = 'P@ssw0rd' 
-driver = '{ODBC Driver 18 for SQL Server}'
-cnxn = pyodbc.connect('DRIVER='+driver+';SERVER='+server+';DATABASE='+database+';UID='+username+';PWD='+ password)
+driver = 'FreeTDS'
+cnxn = pyodbc.connect('DRIVER='+driver+';SERVER='+server+';PORT=1433;DATABASE='+database+';UID='+username+';PWD='+password+';TDS_Version=8.0')
 cursor = cnxn.cursor()
 
-conn_str = "HostName=SeanTestIoTHuB.azure-devices.net;DeviceId=pcsean;SharedAccessKey=Wt2AeTXWBF6gsahS2TGy7F5DpUzucuJYz49aZkeFVyA="
+conn_str = "HostName=FactoryHubDemo.azure-devices.net;DeviceId=PcSean;SharedAccessKey=08/vxUJIvWaANQrBRFSIefdNKyP+ykAnEtdNO/UuPVs="
 #conn_str = os.getenv('connstring')
 device_client = IoTHubDeviceClient.create_from_connection_string(conn_str)
 
@@ -63,18 +65,17 @@ def method_request_handler(method_request):
 
 
 def storagethread(servoNumber):
-    while servos < 4:
-        servoproduct = servo.Servo(pca.channels[servoNumber])
-        x=0.40
-        servoloop.fraction = x
-        while x < 0.70:
-            x = x + 0.01
-            servoloop.fraction = x
-            sleep(0.05)
-        while x > 0.40:
-            x = x - 0.01
-            servoloop.fraction = x
-            sleep(0.05)
+    servoproduct = servo.Servo(pca.channels[servoNumber])
+    x=0.40
+    servoproduct.fraction = x
+    while x < 0.70:
+        x = x + 0.01
+        servoproduct.fraction = x
+        sleep(0.05)
+    while x > 0.40:
+        x = x - 0.01
+        servoproduct.fraction = x
+        sleep(0.05)
 
 
 
@@ -89,27 +90,27 @@ def StartProcess():
         storagethread(0)
         UpdateOrder("Product1")
         UpdateStock(1, 0, 0, 0)
-        time.sleep(1)
+        sleep(1)
     print('{} green ball(s).'.format(product2))
     for i in range(product2):
         storagethread(1)
         UpdateOrder("Product2")
         UpdateStock(0, 1, 0, 0)
-        time.sleep(1)
+        sleep(1)
     print('{} blue ball(s).'.format(product3))
     for i in range(product3):
         storagethread(2)
         UpdateOrder("Product3")
         UpdateStock(0, 0, 1, 0)
-        time.sleep(1)
+        sleep(1)
     print('{} red ball(s).'.format(product4))
     for i in range(product4):
         storagethread(3)
         UpdateOrder("Product4")
         UpdateStock(0, 0, 0, 1)
-        time.sleep(1)
+        sleep(1)
 
-    time.sleep(1)
+    sleep(1)
     print('All products are processed.')
 
 def DeleteInProgress():
@@ -203,10 +204,10 @@ def OrderMethod():
                     if product1 <= product1Stock and product2 <= product2Stock and product3 <= product3Stock and product4 <= product4Stock:
                         print('Enough stock.')
                         UpdateInProgress()
-                        time.sleep(2)
+                        sleep(2)
                     else:
                         print('Not enough stock.')
-                        time.sleep(5)
+                        sleep(5)
                 else:
                     #print('progress niet op 1')
                     break
@@ -232,8 +233,7 @@ def run():
             OrderMethod()
             check = 1
         else:
-            time.sleep(100)
-            print('Checking for new push.')
+            False
 
 
 
@@ -317,18 +317,39 @@ def tunnelthread():
         cv2.imshow("Frame", frame)
         key = cv2.waitKey(1)
 
+def methodhelper():
+    run = 0
+    device_client.connect()
+    print("Connected.")
+    #device_client.on_message_received = message_received_handler
+    device_client.on_method_request_received = method_request_handler
+    while run != 1:
+            try:
+                run = input()
+            except Exception as ex:
+                print(ex)
+            pass
 
 def main():
     try:
+        runs = 1
         t1 = threading.Thread(target=tunnelthread)
         t2 = threading.Thread(target=run)
+        t3 = threading.Thread(target=methodhelper)
+        t1.daemon = True
+        t2.daemon = True
+        t3.daemon = True
         t1.start()
         t2.start()
+        t3.start()
+        while runs == 1:
+            runs = 1
     except KeyboardInterrupt:
         # clean up
         GPIO.output(in1,GPIO.LOW)
         GPIO.output(in2,GPIO.LOW)
         pca.deinit()
+        device_client.disconnect()
 
 
 if __name__ == '__main__':
@@ -352,8 +373,4 @@ if __name__ == '__main__':
     colornow = ""
     p.start(13) #start conveyor
     tunnelServo.fraction = 0.5
-    device_client.connect()
-    print("Connected.")
-    #device_client.on_message_received = message_received_handler
-    device_client.on_method_request_received = method_request_handler
     main()
