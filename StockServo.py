@@ -33,24 +33,19 @@ pca.frequency = 50
 
 def main():
     try:
-        servos = 0
-        while servos < 4:
-            servoloop = servo.Servo(pca.channels[servos])
-            x=0.40
+        servos = 4
+        servoloop = servo.Servo(pca.channels[servos])
+        x=1
+        servoloop.fraction = x
+        while x > 0.8:
+            x = x - 0.01
             servoloop.fraction = x
-            while x < 0.70:
-                x = x + 0.01
-                servoloop.fraction = x
-                sleep(0.05)
-
-            while x > 0.40:
-                x = x - 0.01
-                servoloop.fraction = x
-                sleep(0.05)
-            servos = servos + 1
-
-            if servos == 3:
-                servos = 0
+            sleep(0.05)
+        while x < 1:
+            x = x + 0.01
+            servoloop.fraction = x
+            sleep(0.05)
+        servoloop.fraction = 1
         pca.deinit()
     except KeyboardInterrupt:
         # clean up
